@@ -31,3 +31,18 @@ The provided sample projects for Android and iOS demo the most common usecases.
 ```
 
 
+
+## Getting Started
+
+### Prerequisites
+- Titanium SDK
+
+### Install
+```bash
+titanium project install
+```
+
+### Build
+```bash
+titanium build
+```
