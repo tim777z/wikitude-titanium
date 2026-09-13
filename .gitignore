@@ -29,3 +29,6 @@ DerivedData
 
 
 
+node_modules/
+.env
+*.log
