@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Vendor libraries (minified, third-party)
+WikitudeTitaniumSample/Resources/**/jquery*.js
+WikitudeTitaniumSample/Resources/**/jquery.mobile*.js
+
+# Legacy sample code (pre-existing, not modified in this pass)
+WikitudeTitaniumSample/Resources/android/assets/**/*.js
+WikitudeTitaniumSample/Resources/iphone/**/*.js
+WikitudeTitaniumSample/Resources/jsuri-1.1.1.js
+WikitudeTitaniumSample/Resources/util.js
+WikitudeTitaniumSample/Resources/app.js
+WikitudeTitaniumSample/Resources/ui/**/*.js
+WikitudeTitaniumSample/plugins/**/*.js
+
+# Build outputs
+WikitudeTitaniumSample/build/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Config files (handled separately)
+jest.config.js
+babel.config.json
