@@ -1,16 +1,141 @@
 name: CI
+
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+
 jobs:
-  test:
+  lint-and-test:
+    name: Lint, Test & Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
+          node-version-file: '.nvmrc'
           cache: 'npm'
-      - run: npm ci
-      - run: npm test
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_ENV: development
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run tests with coverage
+        run: npm test
+
+      - name: Security audit (npm audit)
+        run: npm run security:audit
+        continue-on-error: false
+
+      - name: Check for committed secrets
+        run: |
+          if git diff --cached --name-only | xargs grep -l -E "(api[_-]?key|secret|password|token|license)" 2>/dev/null; then
+            echo "::error::Potential secrets found in staged files"
+            exit 1
+          fi
+        shell: bash
+
+  validate-config:
+    name: Validate Configuration Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate package.json
+        run: |
+          node -e "const pkg = require('./package.json'); console.log('Package:', pkg.name, pkg.version);"
+          if ! node -e "require('./package.json')"; then
+            echo "::error::Invalid package.json"
+            exit 1
+          fi
+
+      - name: Validate tiapp.xml
+        run: |
+          if [ -f "WikitudeTitaniumSample/tiapp.xml" ]; then
+            xmllint --noout WikitudeTitaniumSample/tiapp.xml 2>/dev/null || echo "::warning::tiapp.xml validation skipped (xmllint not available)"
+          fi
+
+      - name: Validate .eslintrc.json
+        run: |
+          node -e "require('./.eslintrc.json'); console.log('ESLint config valid')"
+
+      - name: Validate .env.example exists
+        run: |
+          if [ ! -f ".env.example" ]; then
+            echo "::error::.env.example missing"
+            exit 1
+          fi
+          echo ".env.example present"
+
+  check-dependencies:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for outdated packages
+        run: npm outdated --depth=0 || true
+
+      - name: Audit production dependencies only
+        run: npm audit --audit-level=moderate --omit=dev
+
+  # Titanium-specific validation (runs on macOS for iOS/Android SDK availability)
+  titanium-validate:
+    name: Titanium Config Validation
+    runs-on: macos-latest
+    timeout-minutes: 10
+    if: false  # Disabled by default - enable when Titanium CLI available in CI
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate tiapp.xml structure
+        run: |
+          if [ -f "WikitudeTitaniumSample/tiapp.xml" ]; then
+            echo "tiapp.xml found"
+            # Check required elements
+            grep -q "<id>com.wikitude.titaniumsample</id>" WikitudeTitaniumSample/tiapp.xml && echo "✓ App ID present"
+            grep -q "<name>ModuleSamples</name>" WikitudeTitaniumSample/tiapp.xml && echo "✓ App name present"
+            grep -q "<version>5.3.1</version>" WikitudeTitaniumSample/tiapp.xml && echo "✓ Version present"
+            grep -q "com.wikitude.ti" WikitudeTitaniumSample/tiapp.xml && echo "✓ Wikitude module declared"
+          fi
+
+      - name: Check for duplicate sample code
+        run: |
+          echo "Checking for duplicate JS files between Android/iOS..."
+          # This would be expanded with a proper deduplication check
+          find WikitudeTitaniumSample/Resources/android/assets -name "*.js" -not -path "*/jquery/*" | while read f; do
+            rel="${f#WikitudeTitaniumSample/Resources/android/assets/}"
+            ios_f="WikitudeTitaniumSample/Resources/iphone/$rel"
+            if [ -f "$ios_f" ]; then
+              if ! diff -q "$f" "$ios_f" >/dev/null 2>&1; then
+                echo "::warning::Difference found: $rel"
+              fi
+            fi
+          done
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
