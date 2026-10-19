@@ -11,8 +11,10 @@ WikitudeTitaniumSample/Resources/iphone/**/*.js
 WikitudeTitaniumSample/Resources/jsuri-1.1.1.js
 WikitudeTitaniumSample/Resources/util.js
 WikitudeTitaniumSample/Resources/app.js
-WikitudeTitaniumSample/Resources/ui/**/*.js
 WikitudeTitaniumSample/plugins/**/*.js
+
+# Legacy UI code (pre-existing Titanium/CommonJS ES5 code)
+WikitudeTitaniumSample/Resources/ui/**/*.js
 
 # Build outputs
 WikitudeTitaniumSample/build/
@@ -36,3 +38,6 @@ Thumbs.db
 # Config files (handled separately)
 jest.config.js
 babel.config.json
+
+# Coverage
+coverage/

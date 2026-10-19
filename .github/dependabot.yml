@@ -1,0 +1,73 @@
+# Dependabot configuration for automated dependency updates
+# This ensures dependencies stay current and secure
+
+version: 2
+updates:
+  # npm dependencies (devDependencies in this project)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "tim777z"
+    assignees:
+      - "tim777z"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "automated"
+    # Group related updates
+    groups:
+      eslint-plugins:
+        patterns:
+          - "eslint*"
+        update-types:
+          - "minor"
+          - "patch"
+      jest-related:
+        patterns:
+          - "jest*"
+          - "babel-jest"
+          - "@babel/*"
+        update-types:
+          - "minor"
+          - "patch"
+      security-tools:
+        patterns:
+          - "eslint-plugin-security"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore major version updates for stability (review manually)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "tim777z"
+    assignees:
+      - "tim777z"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"

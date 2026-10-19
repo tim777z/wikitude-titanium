@@ -19,6 +19,40 @@ var util = require('util');
 var wikitude = require('com.wikitude.ti');
 
 /**
+ * Error codes for structured error handling
+ * @readonly
+ * @enum {string}
+ */
+var ErrorCodes = {
+    INVALID_LICENSE_KEY: 'ERR_INVALID_LICENSE_KEY',
+    INVALID_WORLD_URL: 'ERR_INVALID_WORLD_URL',
+    INVALID_AR_FEATURES: 'ERR_INVALID_AR_FEATURES',
+    INVALID_COORDINATES: 'ERR_INVALID_COORDINATES',
+    INVALID_URL_SCHEME: 'ERR_INVALID_URL_SCHEME',
+    UNAUTHORIZED_ACTION: 'ERR_UNAUTHORIZED_ACTION',
+    PERMISSION_DENIED: 'ERR_PERMISSION_DENIED',
+    DEVICE_UNSUPPORTED: 'ERR_DEVICE_UNSUPPORTED',
+    WORLD_LOAD_FAILED: 'ERR_WORLD_LOAD_FAILED',
+    INVALID_CALLBACK: 'ERR_INVALID_CALLBACK',
+    INVALID_JS_SOURCE: 'ERR_INVALID_JS_SOURCE'
+};
+
+/**
+ * Creates a structured error with code and metadata
+ * @param {string} code - Error code from ErrorCodes
+ * @param {string} message - Human-readable message
+ * @param {Object} [meta] - Additional metadata
+ * @returns {Error} Structured error object
+ */
+function createError(code, message, meta) {
+    var error = new Error(message);
+    error.code = code;
+    error.meta = meta || {};
+    error.timestamp = new Date().toISOString();
+    return error;
+}
+
+/**
  * Logger utility - replaces alert() with structured logging
  * @namespace Logger
  */
@@ -181,6 +215,28 @@ var Validator = {
      */
     isValidCoordinate: function(coord, min, max) {
         return typeof coord === 'number' && !isNaN(coord) && coord >= min && coord <= max;
+    },
+
+    /**
+     * Validate callback is a function
+     * @param {*} callback - Value to check
+     * @returns {boolean} True if valid function
+     */
+    isValidCallback: function(callback) {
+        return typeof callback === 'function';
+    },
+
+    /**
+     * Validate startup configuration object
+     * @param {Object} config - Configuration object
+     * @returns {boolean} True if valid
+     */
+    isValidStartupConfig: function(config) {
+        if (!config || typeof config !== 'object') {
+            return false;
+        }
+        var validPositions = ['front', 'back'];
+        return !config.camera_position || validPositions.indexOf(config.camera_position) !== -1;
     }
 };
 
@@ -204,13 +260,25 @@ var ALLOWED_ARCHITECT_ACTIONS = [
  */
 function ARchitectWindow(WikitudeLicenseKey, url) {
 
-    // Input validation
+    // Input validation with structured errors
     if (!Validator.isValidLicenseKey(WikitudeLicenseKey)) {
-        throw new Error('Invalid Wikitude license key: must be a non-empty string');
+        var licenseError = createError(
+            ErrorCodes.INVALID_LICENSE_KEY,
+            'Invalid Wikitude license key: must be a non-empty string longer than 10 characters',
+            { providedLength: typeof WikitudeLicenseKey === 'string' ? WikitudeLicenseKey.length : 'non-string' }
+        );
+        Logger.error(licenseError.message, { code: licenseError.code, meta: licenseError.meta });
+        throw licenseError;
     }
 
     if (!Validator.isValidUrl(url, ['http', 'https'])) {
-        throw new Error('Invalid ARchitect world URL: must be a valid HTTP/HTTPS URL');
+        var urlError = createError(
+            ErrorCodes.INVALID_WORLD_URL,
+            'Invalid ARchitect world URL: must be a valid HTTP/HTTPS URL',
+            { providedUrl: typeof url === 'string' ? url.substring(0, 100) : 'non-string' }
+        );
+        Logger.error(urlError.message, { code: urlError.code, meta: urlError.meta });
+        throw urlError;
     }
 
     /* Member Variables */
@@ -242,7 +310,12 @@ function ARchitectWindow(WikitudeLicenseKey, url) {
      */
     this.window.isDeviceSupported = function(augmentedRealityFeatures) {
         if (!Validator.isValidArFeatures(augmentedRealityFeatures)) {
-            Logger.error('Invalid AR features array provided to isDeviceSupported');
+            var featureError = createError(
+                ErrorCodes.INVALID_AR_FEATURES,
+                'Invalid AR features array provided to isDeviceSupported',
+                { providedFeatures: augmentedRealityFeatures }
+            );
+            Logger.error(featureError.message, { code: featureError.code, meta: featureError.meta });
             return false;
         }
 
@@ -259,7 +332,12 @@ function ARchitectWindow(WikitudeLicenseKey, url) {
             });
             Logger.info('Wikitude AR view created', { features: augmentedRealityFeatures });
         } else {
-            Logger.warn('Device does not support required AR features', { features: augmentedRealityFeatures });
+            var deviceError = createError(
+                ErrorCodes.DEVICE_UNSUPPORTED,
+                'Device does not support required AR features',
+                { features: augmentedRealityFeatures }
+            );
+            Logger.warn(deviceError.message, { code: deviceError.code, meta: deviceError.meta });
         }
 
         return isDeviceSupported;
@@ -279,6 +357,7 @@ function ARchitectWindow(WikitudeLicenseKey, url) {
     this.window.locationListener = this.locationListener;
     this.window.Logger = Logger;
     this.window.Validator = Validator;
+    this.window.ErrorCodes = ErrorCodes;
 
     this.configureWindow(this.window);
 
@@ -314,7 +393,12 @@ function ARchitectWindow(WikitudeLicenseKey, url) {
  */
 ARchitectWindow.prototype.callJavaScript = function(jsSource) {
     if (typeof jsSource !== 'string' || jsSource.trim() === '') {
-        Logger.warn('callJavaScript called with empty or invalid source');
+        var jsError = createError(
+            ErrorCodes.INVALID_JS_SOURCE,
+            'callJavaScript called with empty or invalid source',
+            { sourceLength: typeof jsSource === 'string' ? jsSource.length : 'non-string' }
+        );
+        Logger.warn(jsError.message, { code: jsError.code, meta: jsError.meta });
         return;
     }
     // Sanitize to prevent injection
@@ -379,7 +463,12 @@ ARchitectWindow.prototype.configureWindow = function(window) {
                 Logger.info(msg, { path: path });
             },
             onError: function(errorDescription) {
-                Logger.error('Screen capture failed', { error: errorDescription });
+                var captureError = createError(
+                    ErrorCodes.WORLD_LOAD_FAILED,
+                    'Screen capture failed',
+                    { error: errorDescription }
+                );
+                Logger.error(captureError.message, { code: captureError.code, meta: captureError.meta });
             }
         });
     });
@@ -410,11 +499,23 @@ ARchitectWindow.prototype.locationListener = function(arview) {
         if (!Validator.isValidCoordinate(lat, -90, 90) ||
             !Validator.isValidCoordinate(lon, -180, 180) ||
             !Validator.isValidCoordinate(acc, 0, 10000)) {
-            Logger.warn('Invalid coordinate values in location update', {
-                latitude: lat,
-                longitude: lon,
-                accuracy: acc
-            });
+            var coordError = createError(
+                ErrorCodes.INVALID_COORDINATES,
+                'Invalid coordinate values in location update',
+                { latitude: lat, longitude: lon, accuracy: acc }
+            );
+            Logger.warn(coordError.message, { code: coordError.code, meta: coordError.meta });
+            return;
+        }
+
+        // Validate altitude if present
+        if (location.coords.altitude !== 0 && !Validator.isValidCoordinate(alt, -10000, 10000)) {
+            var altError = createError(
+                ErrorCodes.INVALID_COORDINATES,
+                'Invalid altitude value in location update',
+                { altitude: alt }
+            );
+            Logger.warn(altError.message, { code: altError.code, meta: altError.meta });
             return;
         }
 
@@ -446,7 +547,12 @@ ARchitectWindow.prototype.onArchitectWorldLoaded = function(event) {
         Logger.info('ARchitect world loaded successfully');
     } else {
         var errorMsg = (event && event.error) ? event.error : 'Unknown error';
-        Logger.error('Failed to load ARchitect world', { error: errorMsg });
+        var loadError = createError(
+            ErrorCodes.WORLD_LOAD_FAILED,
+            'Failed to load ARchitect world',
+            { error: errorMsg }
+        );
+        Logger.error(loadError.message, { code: loadError.code, meta: loadError.meta });
     }
 };
 
@@ -459,12 +565,33 @@ ARchitectWindow.prototype.onArchitectWorldLoaded = function(event) {
 ARchitectWindow.prototype.loadArchitectWorldFromURL = function(url, augmentedRealityFeatures, startupConfiguration) {
     // Validate URL
     if (!Validator.isValidUrl(url, ['http', 'https'])) {
-        Logger.error('Invalid world URL provided to loadArchitectWorldFromURL', { url: url });
+        var urlError = createError(
+            ErrorCodes.INVALID_WORLD_URL,
+            'Invalid world URL provided to loadArchitectWorldFromURL',
+            { url: typeof url === 'string' ? url.substring(0, 100) : 'non-string' }
+        );
+        Logger.error(urlError.message, { code: urlError.code, meta: urlError.meta });
         return;
     }
 
     if (!Validator.isValidArFeatures(augmentedRealityFeatures)) {
-        Logger.error('Invalid AR features for world load');
+        var featureError = createError(
+            ErrorCodes.INVALID_AR_FEATURES,
+            'Invalid AR features for world load',
+            { providedFeatures: augmentedRealityFeatures }
+        );
+        Logger.error(featureError.message, { code: featureError.code, meta: featureError.meta });
+        return;
+    }
+
+    // Validate startup configuration if provided
+    if (startupConfiguration && !Validator.isValidStartupConfig(startupConfiguration)) {
+        var configError = createError(
+            ErrorCodes.INVALID_AR_FEATURES,
+            'Invalid startup configuration',
+            { config: startupConfiguration }
+        );
+        Logger.error(configError.message, { code: configError.code, meta: configError.meta });
         return;
     }
 
@@ -488,7 +615,12 @@ ARchitectWindow.prototype.loadArchitectWorldFromURL = function(url, augmentedRea
  */
 ARchitectWindow.prototype.onURLWasInvoked = function(event) {
     if (!event || !event.url) {
-        Logger.warn('onURLWasInvoked called with invalid event');
+        var eventError = createError(
+            ErrorCodes.INVALID_URL_SCHEME,
+            'onURLWasInvoked called with invalid event',
+            { event: event }
+        );
+        Logger.warn(eventError.message, { code: eventError.code, meta: eventError.meta });
         return;
     }
 
@@ -496,7 +628,12 @@ ARchitectWindow.prototype.onURLWasInvoked = function(event) {
 
     // Validate architectsdk:// scheme
     if (!Validator.isValidArchitectUrl(url)) {
-        Logger.warn('Non-architectsdk URL invoked, ignoring', { url: url });
+        var schemeError = createError(
+            ErrorCodes.INVALID_URL_SCHEME,
+            'Non-architectsdk URL invoked, ignoring',
+            { url: url }
+        );
+        Logger.warn(schemeError.message, { code: schemeError.code, meta: schemeError.meta });
         return;
     }
 
@@ -508,7 +645,12 @@ ARchitectWindow.prototype.onURLWasInvoked = function(event) {
 
     // Check if action is allowed
     if (action && ALLOWED_ARCHITECT_ACTIONS.indexOf(action) === -1) {
-        Logger.warn('Unauthorized architectsdk action attempted', { action: action, url: url });
+        var actionError = createError(
+            ErrorCodes.UNAUTHORIZED_ACTION,
+            'Unauthorized architectsdk action attempted',
+            { action: action, url: url }
+        );
+        Logger.warn(actionError.message, { code: actionError.code, meta: actionError.meta });
         return;
     }
 
@@ -527,7 +669,12 @@ ARchitectWindow.prototype.onURLWasInvoked = function(event) {
                 Logger.info(msg, { path: path });
             },
             onError: function(errorDescription) {
-                Logger.error('Screen capture failed', { error: errorDescription });
+                var captureError = createError(
+                    ErrorCodes.WORLD_LOAD_FAILED,
+                    'Screen capture failed',
+                    { error: errorDescription }
+                );
+                Logger.error(captureError.message, { code: captureError.code, meta: captureError.meta });
             }
         });
     }
@@ -630,8 +777,13 @@ ARchitectWindow.prototype.onWindowClose = function() {
  * @param {Function} callback - Callback on completion
  */
 ARchitectWindow.prototype.requestLocationPermission = function(callback) {
-    if (typeof callback !== 'function') {
-        Logger.error('requestLocationPermission called without valid callback');
+    if (!Validator.isValidCallback(callback)) {
+        var cbError = createError(
+            ErrorCodes.INVALID_CALLBACK,
+            'requestLocationPermission called without valid callback',
+            {}
+        );
+        Logger.error(cbError.message, { code: cbError.code, meta: cbError.meta });
         return;
     }
 
@@ -644,7 +796,12 @@ ARchitectWindow.prototype.requestLocationPermission = function(callback) {
             if (e.success) {
                 Logger.info('Location permission granted');
             } else {
-                Logger.warn('Location permission denied', { error: e.error });
+                var permError = createError(
+                    ErrorCodes.PERMISSION_DENIED,
+                    'Location permission denied',
+                    { error: e.error }
+                );
+                Logger.warn(permError.message, { code: permError.code, meta: permError.meta });
             }
             callback();
         });
@@ -656,8 +813,13 @@ ARchitectWindow.prototype.requestLocationPermission = function(callback) {
  * @param {Function} callback - Callback on completion
  */
 ARchitectWindow.prototype.requestCameraPermission = function(callback) {
-    if (typeof callback !== 'function') {
-        Logger.error('requestCameraPermission called without valid callback');
+    if (!Validator.isValidCallback(callback)) {
+        var cbError = createError(
+            ErrorCodes.INVALID_CALLBACK,
+            'requestCameraPermission called without valid callback',
+            {}
+        );
+        Logger.error(cbError.message, { code: cbError.code, meta: cbError.meta });
         return;
     }
 
@@ -670,7 +832,12 @@ ARchitectWindow.prototype.requestCameraPermission = function(callback) {
             if (e.success) {
                 Logger.info('Camera permission granted');
             } else {
-                Logger.warn('Camera permission denied', { error: e.error });
+                var permError = createError(
+                    ErrorCodes.PERMISSION_DENIED,
+                    'Camera permission denied',
+                    { error: e.error }
+                );
+                Logger.warn(permError.message, { code: permError.code, meta: permError.meta });
             }
             callback();
         });

@@ -1,5 +1,68 @@
+# Docker Compose for Wikitude Titanium Development
+# Provides consistent environments for development, CI, and security auditing
+
 services:
-  app:
-    build: .
+  # Development environment with interactive shell
+  dev:
+    build:
+      context: .
+      target: development
     volumes:
       - .:/app
+      - node_modules:/app/node_modules
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+      - CI=false
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  # CI environment - runs full pipeline
+  ci:
+    build:
+      context: .
+      target: ci
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      - NODE_ENV=test
+      - CI=true
+    command: sh -c "npm run lint && npm test && npm run security:audit"
+
+  # Security audit environment
+  security:
+    build:
+      context: .
+      target: security-audit
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      - NODE_ENV=test
+      - CI=true
+    command: sh -c "npm run security:audit && npx license-checker --summary --production && trufflehog filesystem . --fail"
+
+  # Lint-only service for quick checks
+  lint:
+    build:
+      context: .
+      target: base
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: npm run lint
+
+  # Test-only service
+  test:
+    build:
+      context: .
+      target: base
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: npm test
+
+volumes:
+  node_modules:

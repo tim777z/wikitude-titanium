@@ -53,7 +53,8 @@
   "overrides": [
     {
       "files": [
-        "WikitudeTitaniumSample/Resources/**/*.js"
+        "WikitudeTitaniumSample/Resources/android/assets/**/*.js",
+        "WikitudeTitaniumSample/Resources/iphone/**/*.js"
       ],
       "env": {
         "browser": true,
@@ -77,7 +78,12 @@
         "no-alert": "warn",
         "no-console": "off",
         "no-unused-vars": "off",
-        "strict": "off"
+        "strict": "off",
+        "no-var": "off",
+        "prefer-const": "off",
+        "object-shorthand": "off",
+        "prefer-arrow-callback": "off",
+        "prefer-template": "off"
       }
     },
     {
@@ -92,7 +98,31 @@
       },
       "rules": {
         "no-alert": "warn",
-        "strict": "off"
+        "strict": "off",
+        "no-var": "off",
+        "prefer-const": "off",
+        "object-shorthand": "off",
+        "prefer-arrow-callback": "off",
+        "prefer-template": "off",
+        "no-redeclare": "off"
+      }
+    },
+    {
+      "files": [
+        "__tests__/**/*.test.js"
+      ],
+      "env": {
+        "jest": true,
+        "node": true
+      },
+      "globals": {
+        "Ti": "writable",
+        "Titanium": "writable"
+      },
+      "rules": {
+        "no-console": "off",
+        "strict": "off",
+        "no-redeclare": "off"
       }
     }
   ]
