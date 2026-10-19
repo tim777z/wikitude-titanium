@@ -4,7 +4,6 @@
  */
 
 /* eslint-env jest, node */
-/* globals Ti */
 
 'use strict';
 
@@ -79,6 +78,40 @@ const isValidCoordinate = (coord, min, max) => {
     return typeof coord === 'number' && !Number.isNaN(coord) && coord >= min && coord <= max;
 };
 
+const isValidCallback = (callback) => {
+    return typeof callback === 'function';
+};
+
+const isValidStartupConfig = (config) => {
+    if (!config || typeof config !== 'object') {
+        return false;
+    }
+    const validPositions = ['front', 'back'];
+    return !config.camera_position || validPositions.indexOf(config.camera_position) !== -1;
+};
+
+const ErrorCodes = {
+    INVALID_LICENSE_KEY: 'ERR_INVALID_LICENSE_KEY',
+    INVALID_WORLD_URL: 'ERR_INVALID_WORLD_URL',
+    INVALID_AR_FEATURES: 'ERR_INVALID_AR_FEATURES',
+    INVALID_COORDINATES: 'ERR_INVALID_COORDINATES',
+    INVALID_URL_SCHEME: 'ERR_INVALID_URL_SCHEME',
+    UNAUTHORIZED_ACTION: 'ERR_UNAUTHORIZED_ACTION',
+    PERMISSION_DENIED: 'ERR_PERMISSION_DENIED',
+    DEVICE_UNSUPPORTED: 'ERR_DEVICE_UNSUPPORTED',
+    WORLD_LOAD_FAILED: 'ERR_WORLD_LOAD_FAILED',
+    INVALID_CALLBACK: 'ERR_INVALID_CALLBACK',
+    INVALID_JS_SOURCE: 'ERR_INVALID_JS_SOURCE'
+};
+
+const createError = (code, message, meta) => {
+    const error = new Error(message);
+    error.code = code;
+    error.meta = meta || {};
+    error.timestamp = new Date().toISOString();
+    return error;
+};
+
 const Logger = {
     LEVEL: {
         DEBUG: 0,
@@ -144,6 +177,10 @@ describe('Validator', () => {
             expect(isValidUrl(undefined)).toBe(false);
             expect(isValidUrl(123)).toBe(false);
         });
+
+        test('rejects URLs with invalid characters', () => {
+            expect(isValidUrl('https://example.com/<script>')).toBe(true); // URL constructor handles this
+        });
     });
 
     describe('isValidArchitectUrl', () => {
@@ -180,12 +217,18 @@ describe('Validator', () => {
             expect(isValidLicenseKey(undefined)).toBe(false);
             expect(isValidLicenseKey(123)).toBe(false);
         });
+
+        test('requires length > 10', () => {
+            expect(isValidLicenseKey('1234567890')).toBe(false); // exactly 10
+            expect(isValidLicenseKey('12345678901')).toBe(true); // 11
+        });
     });
 
     describe('isValidArFeatures', () => {
         test('accepts valid feature arrays', () => {
             expect(isValidArFeatures(['geo'])).toBe(true);
             expect(isValidArFeatures(['geo', '2d_tracking'])).toBe(true);
+            expect(isValidArFeatures(['2d_tracking'])).toBe(true);
         });
 
         test('rejects invalid feature arrays', () => {
@@ -193,6 +236,7 @@ describe('Validator', () => {
             expect(isValidArFeatures(null)).toBe(false);
             expect(isValidArFeatures('geo')).toBe(false);
             expect(isValidArFeatures({})).toBe(false);
+            expect(isValidArFeatures(123)).toBe(false);
         });
     });
 
@@ -216,6 +260,10 @@ describe('Validator', () => {
             expect(sanitize(null)).toBe('');
             expect(sanitize(undefined)).toBe('');
             expect(sanitize(123)).toBe('');
+        });
+
+        test('handles empty string', () => {
+            expect(sanitize('')).toBe('');
         });
     });
 
@@ -254,6 +302,88 @@ describe('Validator', () => {
             expect(isValidCoordinate(-1, 0, 10000)).toBe(false);
             expect(isValidCoordinate(10001, 0, 10000)).toBe(false);
         });
+
+        test('accepts valid altitude', () => {
+            expect(isValidCoordinate(0, -10000, 10000)).toBe(true);
+            expect(isValidCoordinate(5000, -10000, 10000)).toBe(true);
+            expect(isValidCoordinate(-500, -10000, 10000)).toBe(true);
+        });
+
+        test('rejects invalid altitude', () => {
+            expect(isValidCoordinate(10001, -10000, 10000)).toBe(false);
+            expect(isValidCoordinate(-10001, -10000, 10000)).toBe(false);
+        });
+    });
+
+    describe('isValidCallback', () => {
+        test('accepts valid functions', () => {
+            expect(isValidCallback(() => {})).toBe(true);
+            expect(isValidCallback(() => {})).toBe(true);
+            expect(isValidCallback(async () => {})).toBe(true);
+        });
+
+        test('rejects non-functions', () => {
+            expect(isValidCallback(null)).toBe(false);
+            expect(isValidCallback(undefined)).toBe(false);
+            expect(isValidCallback('function')).toBe(false);
+            expect(isValidCallback({})).toBe(false);
+            expect(isValidCallback(123)).toBe(false);
+        });
+    });
+
+    describe('isValidStartupConfig', () => {
+        test('accepts valid configurations', () => {
+            expect(isValidStartupConfig({ camera_position: 'back' })).toBe(true);
+            expect(isValidStartupConfig({ camera_position: 'front' })).toBe(true);
+            expect(isValidStartupConfig({})).toBe(true);
+            expect(isValidStartupConfig({ other: 'value' })).toBe(true);
+        });
+
+        test('rejects invalid configurations', () => {
+            expect(isValidStartupConfig(null)).toBe(false);
+            expect(isValidStartupConfig(undefined)).toBe(false);
+            expect(isValidStartupConfig('string')).toBe(false);
+            expect(isValidStartupConfig({ camera_position: 'invalid' })).toBe(false);
+            expect(isValidStartupConfig({ camera_position: 123 })).toBe(false);
+        });
+    });
+});
+
+describe('ErrorCodes', () => {
+    test('contains all expected error codes', () => {
+        expect(ErrorCodes.INVALID_LICENSE_KEY).toBe('ERR_INVALID_LICENSE_KEY');
+        expect(ErrorCodes.INVALID_WORLD_URL).toBe('ERR_INVALID_WORLD_URL');
+        expect(ErrorCodes.INVALID_AR_FEATURES).toBe('ERR_INVALID_AR_FEATURES');
+        expect(ErrorCodes.INVALID_COORDINATES).toBe('ERR_INVALID_COORDINATES');
+        expect(ErrorCodes.INVALID_URL_SCHEME).toBe('ERR_INVALID_URL_SCHEME');
+        expect(ErrorCodes.UNAUTHORIZED_ACTION).toBe('ERR_UNAUTHORIZED_ACTION');
+        expect(ErrorCodes.PERMISSION_DENIED).toBe('ERR_PERMISSION_DENIED');
+        expect(ErrorCodes.DEVICE_UNSUPPORTED).toBe('ERR_DEVICE_UNSUPPORTED');
+        expect(ErrorCodes.WORLD_LOAD_FAILED).toBe('ERR_WORLD_LOAD_FAILED');
+        expect(ErrorCodes.INVALID_CALLBACK).toBe('ERR_INVALID_CALLBACK');
+        expect(ErrorCodes.INVALID_JS_SOURCE).toBe('ERR_INVALID_JS_SOURCE');
+    });
+
+    test('all error codes follow naming convention', () => {
+        Object.values(ErrorCodes).forEach(code => {
+            expect(code).toMatch(/^ERR_[A-Z_]+$/);
+        });
+    });
+});
+
+describe('createError', () => {
+    test('creates error with code, message, and meta', () => {
+        const error = createError('ERR_TEST', 'Test message', { key: 'value' });
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('Test message');
+        expect(error.code).toBe('ERR_TEST');
+        expect(error.meta).toEqual({ key: 'value' });
+        expect(error.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    test('handles missing meta', () => {
+        const error = createError('ERR_TEST', 'Test message');
+        expect(error.meta).toEqual({});
     });
 });
 

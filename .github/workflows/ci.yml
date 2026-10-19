@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  schedule:
+    # Run weekly to catch dependency updates and security issues
+    - cron: '0 6 * * 1'
 
 jobs:
   lint-and-test:
@@ -44,6 +47,13 @@ jobs:
           fi
         shell: bash
 
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
   validate-config:
     name: Validate Configuration Files
     runs-on: ubuntu-latest
@@ -78,6 +88,14 @@ jobs:
           fi
           echo ".env.example present"
 
+      - name: Validate jest.config.js
+        run: |
+          node -e "require('./jest.config.js'); console.log('Jest config valid')"
+
+      - name: Validate babel.config.json
+        run: |
+          node -e "require('./babel.config.json'); console.log('Babel config valid')"
+
   check-dependencies:
     name: Dependency Review
     runs-on: ubuntu-latest
@@ -101,12 +119,34 @@ jobs:
       - name: Audit production dependencies only
         run: npm audit --audit-level=moderate --omit=dev
 
+      - name: Check for license compliance
+        run: npx license-checker --summary --production || true
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog secret scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --fail --json
+
   # Titanium-specific validation (runs on macOS for iOS/Android SDK availability)
   titanium-validate:
     name: Titanium Config Validation
     runs-on: macos-latest
-    timeout-minutes: 10
-    if: false  # Disabled by default - enable when Titanium CLI available in CI
+    timeout-minutes: 15
+    # Only run on PRs to main/master to save macOS minutes
+    if: github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'master')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -135,6 +175,11 @@ jobs:
               fi
             fi
           done
+
+      - name: Check for large files
+        run: |
+          echo "Checking for files over 500 lines..."
+          find WikitudeTitaniumSample/Resources -name "*.js" -not -path "*/jquery/*" -exec wc -l {} + | awk '$1 > 500 {print "::warning::Large file: " $2 " (" $1 " lines)"}'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
